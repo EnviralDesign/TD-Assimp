@@ -3,11 +3,12 @@ Assimp 3d model loader C++ SOP for TouchDesigner.
 ![image](https://user-images.githubusercontent.com/10091486/217917786-7470d41b-0adf-46b0-a49d-c2e87c7a67ba.png)
 
 To test out the SOP, you should be able to pull or download this repo and simply open test.toe.
-
 If you wish to use TD-Assimp in your own projects, be sure to link your C++ SOP to the TDAssimp.dll like so:
+
 ![image](https://user-images.githubusercontent.com/10091486/217921641-e44c97d9-fb4e-482a-8834-8952df6d7716.png)
 
 After that, be sure to copy the assimp-vc142-mt.dll file into the same directory as TdAssimp.dll, otherwise the SOP will not work.
+
 ![image](https://user-images.githubusercontent.com/10091486/217921798-e49e505c-6927-4725-8f47-8c1e71417c6e.png)
 
 
