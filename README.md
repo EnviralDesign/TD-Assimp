@@ -2,9 +2,17 @@
 Assimp 3d model loader C++ SOP for TouchDesigner.
 ![image](https://user-images.githubusercontent.com/10091486/217917786-7470d41b-0adf-46b0-a49d-c2e87c7a67ba.png)
 
+To test out the SOP, you should be able to pull or download this repo and simply open test.toe.
+
+If you wish to use TD-Assimp in your own projects, be sure to link your C++ SOP to the TDAssimp.dll like so:
+![image](https://user-images.githubusercontent.com/10091486/217921641-e44c97d9-fb4e-482a-8834-8952df6d7716.png)
+
+After that, be sure to copy the assimp-vc142-mt.dll file into the same directory as TdAssimp.dll, otherwise the SOP will not work.
+![image](https://user-images.githubusercontent.com/10091486/217921798-e49e505c-6927-4725-8f47-8c1e71417c6e.png)
+
 
 ## What is Assimp
-Assimp stands for Asset Importer Library. It's an open source library for importing a vast number of file format types, and can export many types too.
+Assimp stands for Asset Importer Library. It's an open source library for importing a vast number of file format types. It can export some types as well, but that functionality is not present in this SOP, as it's designed for importing meshes in to TouchDesigner only.
 
 ## How does this differ from TouchDesigner's file in SOP?
 
@@ -13,7 +21,7 @@ Assimp stands for Asset Importer Library. It's an open source library for import
 
 ### Supported formats:
 
-TouchDesigner's file in SOP only supports the following formats:
+TouchDesigner's file in SOP supports the following formats:
 - TouchDesigner : .tog
 - Houdini : .classic, .bhclassic
 - Common : .obj
@@ -132,3 +140,7 @@ Most applications will support UV mapping only, so you will probably want to spe
 
 - **Vertex Color Tint**
   - Simply tints the vertex color from default of white, to a color of your choosing. you can do this with separate SOP's down stream if you wish as well, this is just a slightly faster approach to bundle it in with Assimp on the c++ side.
+
+## Support
+
+If you find this useful, please feel free to support this work on my [Github Sponsors](https://github.com/sponsors/EnviralDesign) OR on [Patreon](https://www.patreon.com/EnviralDesign). If you have aeny issues or bugs, please drop an issue here.
