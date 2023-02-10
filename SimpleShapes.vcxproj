@@ -58,12 +58,12 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>$(SolutionDir)Dependancies\ASSIMP\include;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Dependancies\ASSIMP\include;$(SolutionDir)Dependancies\MIKKTWELD;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
-      <AdditionalLibraryDirectories>$(SolutionDir)Dependancies\ASSIMP\lib;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)Dependancies\ASSIMP\lib;$(SolutionDir)Dependancies\MIKKTWELD;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>assimp-vc142-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -75,18 +75,19 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <AdditionalIncludeDirectories>$(SolutionDir)Dependancies\ASSIMP\include;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Dependancies\ASSIMP\include;$(SolutionDir)Dependancies\MIKKTWELD;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
       <OptimizeReferences>true</OptimizeReferences>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <AdditionalLibraryDirectories>$(SolutionDir)Dependancies\ASSIMP\lib;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)Dependancies\ASSIMP\lib;$(SolutionDir)Dependancies\MIKKTWELD;$(SolutionDir)Dependancies\MIKKTSPACE;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>assimp-vc142-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Dependancies\MIKKTWELD\weldmesh.c" />
     <ClCompile Include="Mesh_Process.cpp" />
     <ClCompile Include="TdAssimp.cpp">
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">WIN32;_DEBUG;_WINDOWS;_USRDLL;SIMPLESHAPES_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -94,6 +95,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DataAndTypes.h" />
+    <ClInclude Include="Dependancies\MIKKTWELD\weldmesh.h" />
     <ClInclude Include="mymath.h" />
     <ClInclude Include="TdAssimp.h" />
     <ClInclude Include="CPlusPlus_Common.h" />

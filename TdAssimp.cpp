@@ -199,29 +199,14 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 	myExecuteCount++;
 	std::cout << "======================================" << std::endl;
 
-	// UPDATE: no longer giving this option, as it tangles up parameter dependancy for no reason.
-	// Calctangentspace parameter determines if Tbnasquat is active/available.
-	// inputs->enablePar("Tbnasquat", inputs->getParInt("Calctangentspace"));
-
 	// output style, choose TouchDesigner(0) or Google Filament(1)
 	int Attributestyle = inputs->getParInt("Attributestyle");
 
-	// Calctangentspace parameter determines if Tangentalgorithm is active/available.
+	// enable the Tangentalgorithm parameter, maybe able to delete this later due to a bug.
 	inputs->enablePar("Tangentalgorithm", 1);
-
-	// TD does not use the  bitangent vertex attribute, it calculates it in the vertex shader.
-	// however if we are using this to feed google filament style rendering, which packs tbn into a quat
-	// we want to allow the user to recalculate the bitangents incase assimp messes them up OR if mikktspace
-	// is used for proper tangent generation.
-	// int enableRecalcBitangent = inputs->getParInt("Calctangentspace");
-	// inputs->enablePar("Recalculatebitangent", enableRecalcBitangent);
-	// int RecalculateBitangent = inputs->getParInt("Recalculatebitangent") * enableRecalcBitangent;
 
 	// determine if we are processing tangents as assimp imported style OR as mikktspace tangents.
 	int DoMikktSpaceTangents = inputs->getParInt("Tangentalgorithm") == 0;
-
-	// no longer need this explicit toggle, since we are relying on the new parameter called "Attributestyle"
-	// int DoTbnAsQuat = inputs->getParInt("Calctangentspace") ? inputs->getParInt("Tbnasquat");
 	
 	
 	// assign the various helper functions to mikktspace's interface object so it knows how to interact with our data.
@@ -583,34 +568,162 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 		}
 
-		// add points, normals, and vertex colors.
-		output->addPoints(mesh.Position_Data.data(), vtxOffset);
-		output->setNormals(mesh.Normal_Data.data(), vtxOffset, 0);
-		output->setColors(mesh.Color_Data.data(), vtxOffset, 0);
 
-		// setTexCoords() seem broken, so we can't add them in one go.
-		int texindex = 0;
-		for (TexCoord i : mesh.Uv_Data){
-			output->setTexCoord(&i, 1, texindex);
-			texindex++;
+
+		////// TODO: maybe eventually get some tangent smoothing in here?
+		//for (int tri_index = 0; tri_index < mesh.numTris; tri_index++) {
+		//
+		//}
+
+		//Triangle tri;
+		//tri.uvs[0].u = 0;
+		//tri.uvs[0].u = 1;
+
+		//Assimp::DefaultLogger::get()->info("VERTS AFTER WELD: " + std::to_string(mesh.numTris));
+		
+
+		/*
+		////////////////////// DO MESH WELDING /////////////////////////
+		if (DoMikktSpaceTangents == 1) {
+
+			std::vector<float> vertex_data_in;
+			int num_verts_pre_weld = mesh.Position_Data.size();
+			int num_floats_per_vert = 0; // just initializing here.
+
+			// Attributestyle == 0, TouchDesigner = 17 floats (P[3] + N[3] + Cd[4] + uv[3] + T[4] )
+			// Attributestyle == 0, TouchDesigner = 14 floats (P[3] + N[3] + Cd[4] + uv[3] )
+			// Attributestyle == 0, TouchDesigner = 3 floats (P[3] )
+			if (Attributestyle == 0) {
+				num_floats_per_vert = 13;
+			}
+
+			// Attributestyle == 1, GoogleFilament = 13 floats (P[3] + mesh_color[4] + mesh_uv0[2] + mesh_tangents[4] )
+			else if (Attributestyle == 1) {
+				num_floats_per_vert = 13;
+			}
+
+			// initialize some destination memory.
+			std::vector<int> remap_table (num_verts_pre_weld, 0);
+			std::vector<float> vertex_data_out(num_verts_pre_weld * num_floats_per_vert, 0);
+
+			// assemble vertex data in the structure that is required for the Attributestyle:
+
+			if (Attributestyle == 0) { // TouchDesigner
+				
+				for (int i = 0; i < mesh.Position_Data.size(); i++) { // i is vertex index.
+					
+					vertex_data_in.push_back(mesh.Position_Data[i].x);
+					vertex_data_in.push_back(mesh.Position_Data[i].y);
+					vertex_data_in.push_back(mesh.Position_Data[i].z);
+
+					vertex_data_in.push_back(mesh.Normal_Data[i].x);
+					vertex_data_in.push_back(mesh.Normal_Data[i].y);
+					vertex_data_in.push_back(mesh.Normal_Data[i].z);
+
+					vertex_data_in.push_back(mesh.Color_Data[i].r);
+					vertex_data_in.push_back(mesh.Color_Data[i].g);
+					vertex_data_in.push_back(mesh.Color_Data[i].b);
+					vertex_data_in.push_back(mesh.Color_Data[i].a);
+
+					vertex_data_in.push_back(mesh.Uv_Data[i].u);
+					vertex_data_in.push_back(mesh.Uv_Data[i].v);
+					vertex_data_in.push_back(mesh.Uv_Data[i].w);
+
+					//vertex_data_in.push_back(mesh.Tangent_Data[i * 3 + 0]);
+					//vertex_data_in.push_back(mesh.Tangent_Data[i * 3 + 1]);
+					//vertex_data_in.push_back(mesh.Tangent_Data[i * 3 + 2]);
+
+				}
+			}
+
+			int num_verts_post_weld = WeldMesh(remap_table.data() , vertex_data_out.data() , vertex_data_in.data() , num_verts_pre_weld, num_floats_per_vert);
+
+			Assimp::DefaultLogger::get()->info("VERTS AFTER WELD: " + std::to_string(num_verts_post_weld));
+			Assimp::DefaultLogger::get()->info("VERTS AFTER WELD: " 
+				+ std::to_string(remap_table[0]) + ',' 
+				+ std::to_string(remap_table[1]) + ','
+			);
+
 		}
 
-		// add tangents.
-		SOP_CustomAttribData Tangents_Attribute("T", 4, AttribType::Float);
-		Tangents_Attribute.floatData = mesh.Tangent_Data.data();
-		output->setCustomAttribute(&Tangents_Attribute, output->getNumPoints());
+		/////////////////////// END MESH WELDING ////////////////////////
+		*/
 
-		// add bitangents
-		SOP_CustomAttribData Bitangents_Attribute("B", 3, AttribType::Float);
-		Bitangents_Attribute.floatData = mesh.Bitangent_Data.data();
-		output->setCustomAttribute(&Bitangents_Attribute, output->getNumPoints());
 
-		// add tbnquat if toggle is enabled.
-		if (Attributestyle == 1) {
-			SOP_CustomAttribData tbnQuat_Attribute("tbnQuat", 4, AttribType::Float);
-			tbnQuat_Attribute.floatData = mesh.TbnQuat_Data.data();
-			output->setCustomAttribute(&tbnQuat_Attribute, output->getNumPoints());
+		if (Attributestyle == 0) { // IF ATTRIBUTE STYLE IS TouchDesigner:
+
+			// add positions, normals, and colors.
+			output->addPoints(mesh.Position_Data.data(), vtxOffset);
+			output->setNormals(mesh.Normal_Data.data(), vtxOffset, 0);
+			output->setColors(mesh.Color_Data.data(), vtxOffset, 0);
+			
+			// add uvs, setTexCoords() seem broken, so we can't add them in one go.
+			int texindex = 0;
+			for (TexCoord i : mesh.Uv_Data) {
+				output->setTexCoord(&i, 1, texindex);
+				texindex++;
+			}
+
+			// add tangents.
+			SOP_CustomAttribData Tangents_Attribute("T", 4, AttribType::Float);
+			Tangents_Attribute.floatData = mesh.Tangent_Data.data();
+			output->setCustomAttribute(&Tangents_Attribute, output->getNumPoints());
+
 		}
+
+		if (Attributestyle == 1) { // IF ATTRIBUTE STYLE IS GoogleFilament:
+
+			// add positions, TD requires this at a bare minimum. Filament looks for a vec4 called mesh_position though.
+			output->addPoints(mesh.Position_Data.data(), vtxOffset);
+
+			// add normals, this is extra attributes to upload to GPU, but it gives the SOP correct shading in TD. maybe we turn this off later.
+			output->setNormals(mesh.Normal_Data.data(), vtxOffset, 0);
+
+			// add mesh_position, the vertex attribute filament actually looks for.
+			// since our position data is vec3, we expand it here to vec4.
+			SOP_CustomAttribData mesh_position_attrs("mesh_position", 4, AttribType::Float);
+			std::vector<float> expandedPositions;
+			for (int i = 0; i < mesh.Position_Data.size() / 3; i++) {
+				expandedPositions.push_back(mesh.Position_Data[i].x);
+				expandedPositions.push_back(mesh.Position_Data[i].y);
+				expandedPositions.push_back(mesh.Position_Data[i].z);
+				expandedPositions.push_back(1.0f);}
+			// assign it as a custom attribute, even though it's a fairly standard one by filament's standards.
+			mesh_position_attrs.floatData = expandedPositions.data();
+			output->setCustomAttribute(&mesh_position_attrs, output->getNumPoints());
+
+			// add mesh_color for filament. fortunately color data is already a vec4.
+			// unfortunately can't assign it directly for c++ reasons. this is probably unefficient, so lets look at it later.
+			// maybe we can not use TD's Color class to store this in general.
+			SOP_CustomAttribData mesh_color_attrs("mesh_color", 4, AttribType::Float);
+			std::vector<float> expandedColors;
+			for (int i = 0; i < mesh.Color_Data.size() / 4; i++) {
+				expandedColors.push_back(mesh.Color_Data[i].r);
+				expandedColors.push_back(mesh.Color_Data[i].g);
+				expandedColors.push_back(mesh.Color_Data[i].b);
+				expandedColors.push_back(mesh.Color_Data[i].a);}
+			mesh_color_attrs.floatData = expandedColors.data();
+			output->setCustomAttribute(&mesh_color_attrs, output->getNumPoints());
+			
+			// set mesh_uv0 for filament.
+			SOP_CustomAttribData mesh_uv0_attrs("mesh_uv0", 2, AttribType::Float);
+			std::vector<float> expandedUvs0;
+			int texindex = 0;
+			for (TexCoord i : mesh.Uv_Data) {
+				// output->setTexCoord(&i, 1, texindex);
+				expandedUvs0.push_back(*(&i.u));
+				expandedUvs0.push_back(*(&i.v));
+				texindex++;
+			}
+			mesh_uv0_attrs.floatData = expandedUvs0.data();
+			output->setCustomAttribute(&mesh_uv0_attrs, output->getNumPoints());
+		}
+
+		// set mesh_tangents for filament.
+		SOP_CustomAttribData mesh_tangents_attrs("mesh_tangents", 4, AttribType::Float);
+		mesh_tangents_attrs.floatData = mesh.TbnQuat_Data.data();
+		output->setCustomAttribute(&mesh_tangents_attrs, output->getNumPoints());
+
 
 		////////////////////////////////////////////////
 		/////////////////// STANDARD MESH TRIANGLES ////
@@ -651,6 +764,15 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			}
 
 		}
+
+		//mesh.Position_Data.clear();
+		//mesh.Normal_Data.clear();
+		//mesh.Uv_Data.clear();
+		//mesh.Color_Data.clear();
+		//mesh.Tangent_Data.clear();
+		//mesh.Bitangent_Data.clear();
+		//mesh.TbnQuat_Data.clear();
+		//mesh.FaceIndex_Data.clear();
 
 	}
 

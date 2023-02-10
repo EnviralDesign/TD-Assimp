@@ -61,22 +61,7 @@ public:
 
 private:
 
-	// example functions for generating a geometry, change them with any
-	// fucntions and algorithm:
 
-	void cubeGeometry(SOP_Output* output, float scale = 1.0f);
-
-	void lineGeometry(SOP_Output* output);
-
-	void triangleGeometry(SOP_Output* output);
-
-	void cubeGeometryVBO(SOP_VBOOutput* output, float scale = 1.0f);
-
-	void lineGeometryVBO(SOP_VBOOutput* output);
-
-	void triangleGeometryVBO(SOP_VBOOutput* output);
-
-	void particleGeometryVBO(SOP_VBOOutput* output);
 
 	//// holder for generic data.
 	//Position pos;
