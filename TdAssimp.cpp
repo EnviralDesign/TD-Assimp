@@ -199,21 +199,30 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 	myExecuteCount++;
 	std::cout << "======================================" << std::endl;
 
+	// UPDATE: no longer giving this option, as it tangles up parameter dependancy for no reason.
 	// Calctangentspace parameter determines if Tbnasquat is active/available.
-	inputs->enablePar("Tbnasquat", inputs->getParInt("Calctangentspace"));
-	inputs->enablePar("Tangentalgorithm", inputs->getParInt("Calctangentspace"));
+	// inputs->enablePar("Tbnasquat", inputs->getParInt("Calctangentspace"));
+
+	// output style, choose TouchDesigner(0) or Google Filament(1)
+	int Attributestyle = inputs->getParInt("Attributestyle");
+
+	// Calctangentspace parameter determines if Tangentalgorithm is active/available.
+	inputs->enablePar("Tangentalgorithm", 1);
 
 	// TD does not use the  bitangent vertex attribute, it calculates it in the vertex shader.
 	// however if we are using this to feed google filament style rendering, which packs tbn into a quat
 	// we want to allow the user to recalculate the bitangents incase assimp messes them up OR if mikktspace
 	// is used for proper tangent generation.
-	int enableRecalcBitangent = inputs->getParInt("Calctangentspace");
-	inputs->enablePar("Recalculatebitangent", enableRecalcBitangent);
-	int RecalculateBitangent = inputs->getParInt("Recalculatebitangent") * enableRecalcBitangent;
+	// int enableRecalcBitangent = inputs->getParInt("Calctangentspace");
+	// inputs->enablePar("Recalculatebitangent", enableRecalcBitangent);
+	// int RecalculateBitangent = inputs->getParInt("Recalculatebitangent") * enableRecalcBitangent;
 
 	// determine if we are processing tangents as assimp imported style OR as mikktspace tangents.
-	int DoMikktSpaceTangents = inputs->getParInt("Calctangentspace") ? inputs->getParInt("Tangentalgorithm") == 0 : 0;
-	int DoTbnAsQuat = inputs->getParInt("Tbnasquat");
+	int DoMikktSpaceTangents = inputs->getParInt("Tangentalgorithm") == 0;
+
+	// no longer need this explicit toggle, since we are relying on the new parameter called "Attributestyle"
+	// int DoTbnAsQuat = inputs->getParInt("Calctangentspace") ? inputs->getParInt("Tbnasquat");
+	
 	
 	// assign the various helper functions to mikktspace's interface object so it knows how to interact with our data.
 	iface.m_getNumFaces = get_num_faces;
@@ -275,7 +284,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 	// post processing documentation: http://assimp.sourceforge.net/lib_html/postprocess_8h.html
 
 	const unsigned int meshProcessingFlags = 0
-		| (inputs->getParInt("Calctangentspace")			== 1 ? aiProcess_CalcTangentSpace : 0)
+		| aiProcess_CalcTangentSpace // calc tangent space must be enabled
 		| (inputs->getParInt("Joinidenticalvertices")		== 1 ? aiProcess_JoinIdenticalVertices : 0)
 		| aiProcess_Triangulate // triangulation must be enabled.
 		| (inputs->getParInt("Gennormals")					== 1 ? aiProcess_GenNormals : 0)
@@ -381,7 +390,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 					tangent[1] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][1] : 0;
 					tangent[2] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][2] : 0;
 
-					if (RecalculateBitangent == 1) {
+					if (Attributestyle == 1) {
 						// recalc bitangent
 						cross(normal, tangent, bitangent);
 					}
@@ -396,7 +405,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 					mesh.Bitangent_Data.push_back(bitangent[2]); // z
 
 
-					if (DoTbnAsQuat == 1) {
+					if (Attributestyle == 1) {
 						tbn_to_quat(
 							tangent[0], tangent[1], tangent[2], tangentSign,
 							bitangent[0], bitangent[1], bitangent[2],
@@ -498,7 +507,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 						tangent[1] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][1] : 0;
 						tangent[2] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][2] : 0;
 
-						if (RecalculateBitangent == 1) {
+						if (Attributestyle == 1) {
 							// recalc bitangent, writes data to third argument.
 							cross(normal, tangent, bitangent);
 						}
@@ -549,7 +558,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 				bitangent[1] = mesh.Bitangent_Data[(vertex_index * 3) +1];
 				bitangent[2] = mesh.Bitangent_Data[(vertex_index * 3) +2];
 
-				if (DoTbnAsQuat == 1) {
+				if (Attributestyle == 1) {
 					
 					// OLD WAY, maybe creating issues.
 					/*
@@ -597,7 +606,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 		output->setCustomAttribute(&Bitangents_Attribute, output->getNumPoints());
 
 		// add tbnquat if toggle is enabled.
-		if (DoTbnAsQuat == 1) {
+		if (Attributestyle == 1) {
 			SOP_CustomAttribData tbnQuat_Attribute("tbnQuat", 4, AttribType::Float);
 			tbnQuat_Attribute.floatData = mesh.TbnQuat_Data.data();
 			output->setCustomAttribute(&tbnQuat_Attribute, output->getNumPoints());
@@ -647,703 +656,17 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 }
 
-//-----------------------------------------------------------------------------------------------------
-//								Generate a geometry and load it straight to GPU (faster)
-//-----------------------------------------------------------------------------------------------------
 
-// fillFaceVBO() get the vertices, normals, colors, texcoords and triangles buffer pointers and then fills in the
-// buffers with the input arguments and their sizes.
-void
-fillFaceVBO(SOP_VBOOutput* output,
-	Position* inVert, Vector* inNormal, Color* inColor, TexCoord* inTexCoord, int32_t*  inIdx,
-	int VertSz, int triSize, int numTexLayers,
-	float scale = 1.0f)
-{
 
-	Position* vertOut = nullptr;
-	if(inVert)
-		vertOut = output->getPos();
-	Vector* normalOut = nullptr;
-	if (inNormal)
-		normalOut = output->getNormals();
-	Color* colorOut = nullptr;
-	if(inColor)
-		colorOut = output->getColors();
-
-	TexCoord* texCoordOut = nullptr;
-	if(inTexCoord)
-		texCoordOut = output->getTexCoords();
-	int32_t* indexBuffer = output->addTriangles(triSize);
-
-	for (int i = 0; i < triSize; i++)
-	{
-		*(indexBuffer++) = inIdx[i * 3 + 0];
-		*(indexBuffer++) = inIdx[i * 3 + 1];
-		*(indexBuffer++) = inIdx[i * 3 + 2];
-	}
-
-	int k = 0;
-	while (k < VertSz * 3)
-	{
-		*(vertOut++) = inVert[k] * scale;
-
-		if (output->hasNormal())
-		{
-			*(normalOut++) = inNormal[k];
-		}
-
-		if (output->hasColor())
-		{
-			*(colorOut++) = inColor[k];
-		}
-
-		if (output->hasTexCoord())
-		{
-			for (int t = 0; t < numTexLayers +1; t++)
-			{
-				*(texCoordOut++) = inTexCoord[(k * (numTexLayers + 1) + t)];
-			}
-		}
-		k++;
-	}
-}
-
-// fillLineVBO() get the vertices, normals, colors, texcoords and triangles buffer pointers and then fills in the
-// buffers with the input arguments and their sizes.
-void
-fillLineVBO(SOP_VBOOutput* output,
-	Position* inVert, Vector* inNormal, Color* inColor, TexCoord* inTexCoord, int32_t*  inIdx,
-	int vertSz, int lineSize, int numTexLayers)
-{
-	Position* vertOut = nullptr;
-	if (inVert)
-		vertOut = output->getPos();
-	Vector* normalOut = nullptr;
-	if (inNormal)
-		normalOut = output->getNormals();
-	Color* colorOut = nullptr;
-	if (inColor)
-		colorOut = output->getColors();
-	TexCoord* texCoordOut = nullptr;
-	if (inTexCoord)
-		texCoordOut = output->getTexCoords();
-
-	int32_t* indexBuffer = output->addLines(lineSize);
-
-	for (int i = 0; i < lineSize; i++)
-	{
-		*(indexBuffer++) = inIdx[i];
-	}
-
-	int k = 0;
-	while (k < vertSz)
-	{
-		*(vertOut++) = inVert[k];
-
-		if (output->hasNormal())
-		{
-			*(normalOut++) = inNormal[k];
-		}
-
-		if (output->hasColor())
-		{
-			*(colorOut++) = inColor[k];
-		}
-
-		if (output->hasTexCoord())
-		{
-			for (int t = 0; t < numTexLayers + 1; t++)
-			{
-				*(texCoordOut++) = inTexCoord[(k * (numTexLayers + 1) + t)];
-			}
-		}
-		k++;
-	}
-}
-
-// fillFaceVBO() get the vertices, normals, colors, texcoords and triangles buffer pointers and then fills in the
-// buffers with the input arguments and their sizes.
-void
-fillParticleVBO(SOP_VBOOutput* output,
-	Position* inVert, Vector* inNormal, Color* inColor, TexCoord* inTexCoord, int32_t*  inIdx,
-	int vertSz, int size, int numTexLayers)
-{
-
-	Position* vertOut = nullptr;
-	if (inVert)
-		vertOut = output->getPos();
-	Vector* normalOut = nullptr;
-	if (inNormal)
-		normalOut = output->getNormals();
-	Color* colorOut = nullptr;
-	if (inColor)
-		colorOut = output->getColors();
-	TexCoord* texCoordOut = nullptr;
-	if (inTexCoord)
-		texCoordOut = output->getTexCoords();
-
-	int32_t* indexBuffer = output->addParticleSystem(size);
-
-	for (int i = 0; i < size; i++)
-	{
-		*(indexBuffer++) = inIdx[i];
-	}
-
-	int k = 0;
-	while (k < vertSz)
-	{
-		*(vertOut++) = inVert[k];
-
-		if (output->hasNormal())
-		{
-			*(normalOut++) = inNormal[k];
-		}
-
-		if (output->hasColor())
-		{
-			*(colorOut++) = inColor[k];
-		}
-
-		if (output->hasTexCoord())
-		{
-			for (int t = 0; t < numTexLayers + 1; t++)
-			{
-				*(texCoordOut++) = inTexCoord[(k * (numTexLayers + 1) + t)];
-			}
-		}
-		k++;
-	}
-}
 
 void
-TdAssimp::cubeGeometryVBO(SOP_VBOOutput* output, float scale)
-{
-	Position pointArr[] =
-	{
-		//front
-		Position(1.0, -1.0, 1.0), //v0
-		Position(3.0, -1.0, 1.0), //v1
-		Position(3.0, 1.0, 1.0),  //v2
-		Position(1.0, 1.0, 1.0), //v3
-
-		//right
-		Position(3.0, 1.0, 1.0), //v2
-		Position(3.0, 1.0, -1.0), //v6
-		Position(3.0, -1.0, -1.0),//v5
-		Position(3.0, -1.0, 1.0),//v1
-
-
-		//back
-		Position(1.0, -1.0, -1.0), //v4
-		Position(3.0, -1.0, -1.0),  //v5
-		Position(3.0, 1.0, -1.0),  //v6
-		Position(1.0, 1.0, -1.0), //v7
-
-
-		//left
-		Position(1.0, -1.0, -1.0), //v4
-		Position(1.0, -1.0, 1.0),// v0
-		Position(1.0, 1.0, 1.0),//v3
-		Position(1.0, 1.0, -1.0),//v7
-
-
-		//upper
-		Position(3.0, 1.0, 1.0),//v1
-		Position(1.0, 1.0, 1.0),//v3
-		Position(1.0, 1.0, -1.0),//v7
-		Position(3.0, 1.0, -1.0),//v6
-
-
-		//bottom
-		Position(1.0, -1.0, -1.0),//v4
-		Position(3.0, -1.0, -1.0),//v5
-		Position(3.0, -1.0, 1.0),//v1
-		Position(1.0, -1.0, 1.0)//v0
-	};
-
-	Vector normals[] =
-	{
-		//front
-		Vector(1.0, 0.0, 0.0), //v0
-		Vector(0.0, 1.0, 0.0),//v1
-		Vector(0.0, 0.0, 1.0),//v2
-		Vector(1.0, 1.0, 1.0),//v3
-
-		//right
-		Vector(0.0, 0.0, 1.0),//v2
-		Vector(0.0, 0.0, 1.0), //v6
-		Vector(0.0, 1.0, 0.0),//v5
-		Vector(0.0, 1.0, 0.0),//v1
-
-		//back
-		Vector(1.0, 0.0, 0.0), //v4
-		Vector(0.0, 1.0, 0.0), //v5
-		Vector(0.0, 0.0, 1.0),//v6
-		Vector(1.0, 1.0, 1.0),//v7
-
-		//left
-		Vector(1.0, 0.0, 0.0), //v4
-		Vector(1.0, 0.0, 0.0),// v0
-		Vector(1.0, 1.0, 1.0),//v3
-		Vector(1.0, 1.0, 1.0),//v7
-
-		//upper
-		Vector(0.0, 1.0, 0.0),//v1
-		Vector(1.0, 1.0, 1.0),//v3
-		Vector(1.0, 1.0, 1.0),//v7
-		Vector(0.0, 0.0, 1.0),//v6
-
-		//bottom
-		Vector(1.0, 0.0, 0.0),//v4
-		Vector(0.0, 1.0, 0.0),//v5
-		Vector(0.0, 1.0, 0.0),//v1
-		Vector(1.0, 0.0, 0.0),//v0
-	};
-
-	Color colors[] = {
-		//front
-		Color(0, 0, 1, 1),
-		Color(1, 0, 1, 1),
-		Color(1, 1, 1, 1),
-		Color(0, 1, 1, 1),
-
-		//right
-		Color(1, 1, 1, 1),
-		Color(1, 1, 0, 1),
-		Color(1, 0, 0, 1),
-		Color(1, 0, 1, 1),
-
-		//back
-		Color(0, 0, 0, 1),
-		Color(1, 0, 0, 1),
-		Color(1, 1, 0, 1),
-		Color(0, 1, 0, 1),
-
-		//left
-		Color(0, 0, 0, 1),
-		Color(0, 0, 1, 1),
-		Color(0, 1, 1, 1),
-		Color(0, 1, 0, 1),
-
-		//up
-		Color(1, 1, 1, 1),
-		Color(0, 1, 1, 1),
-		Color(0, 1, 0, 1),
-		Color(1, 1, 0, 1),
-
-		//bottom
-		Color(0, 0, 0, 1),
-		Color(1, 0, 0, 1),
-		Color(1, 0, 1, 1),
-		Color(0, 0, 1, 1)
-	};
-
-	TexCoord texcoords[] =
-	{
-		//front
-		TexCoord(0.0, 0.0, 0.0),//v0
-		TexCoord(0.0, 1.0, 0.0),//v1
-		TexCoord(1.0, 1.0, 0.0),//v2
-		TexCoord(1.0, 0.0, 0.0),//v3
-
-		//right
-		TexCoord(1.0, 0.0, 0.0),//v2
-		TexCoord(1.0, 1.0, 0.0),//v6
-		TexCoord(1.0, 1.0, 0.0),//v5
-		TexCoord(1.0, 0.0, 0.0),//v1
-
-
-		//back
-		TexCoord(1.0, 0.0, 0.0),//v4
-		TexCoord(1.0, 1.0, 0.0),//v5
-		TexCoord(0.0, 1.0, 0.0),//v6
-		TexCoord(0.0, 0.0, 0.0),//v7
-
-
-		//left
-		TexCoord(0.0, 0.0, 0.0), //v4
-		TexCoord(0.0, 1.0, 0.0), //v0
-		TexCoord(0.0, 1.0, 0.0),//v3
-		TexCoord(0.0, 0.0, 0.0),//v7
-
-
-		//upper
-		TexCoord(0.0, 0.0, 0.0),//v1
-		TexCoord(0.0, 0.0, 0.0),//v3
-		TexCoord(1.0, 0.0, 0.0),//v7
-		TexCoord(1.0, 0.0, 0.0),//v6
-
-
-		//bottom
-		TexCoord(0.0, 0.0, 0.0),//v4
-		TexCoord(0.0, 1.0, 0.0),//v5
-		TexCoord(1.0, 1.0, 0.0),//v1
-		TexCoord(1.0, 1.0, 0.0),//v0
-	};
-
-	int32_t vertices[] =
-	{
-		0,  1,  2,  0,  2,  3,   //front
-		4,  5,  6,  4,  6,  7,   //right
-		8,  9,  10, 8,  10, 11,  //back
-		12, 13, 14, 12, 14, 15,  //left
-		16, 17, 18, 16, 18, 19,  //upper
-		20, 21, 22, 20, 22, 23
-	};
-
-	// fill in the VBO buffers for this cube:
-
-	fillFaceVBO(output, pointArr, normals, colors, texcoords, vertices, 8, 12, myNumVBOTexLayers, scale);
-
-	return;
-}
-
-void
-TdAssimp::lineGeometryVBO(SOP_VBOOutput* output)
-{
-	Position pointArr[] =
-	{
-		Position(-0.8f, 0.0f, 1.0f),
-		Position(-0.6f, 0.4f, 1.0f),
-		Position(-0.4f, 0.8f, 1.0f),
-		Position(-0.2f, 0.4f, 1.0f),
-		Position(0.0f,  0.0f, 1.0f),
-		Position(0.2f, -0.4f, 1.0f),
-		Position(0.4f, -0.8f, 1.0f),
-		Position(0.6f, -0.4f, 1.0f),
-		Position(0.8f,  0.0f, 1.0f),
-	};
-
-	Vector normals[] =
-	{
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-		Vector(1.0, 1.0, 1.0),
-	};
-
-	Color colors[] = {
-		Color(0, 0, 1, 1),
-		Color(1, 0, 1, 1),
-		Color(1, 1, 1, 1),
-		Color(0, 1, 1, 1),
-		Color(1, 1, 1, 1),
-		Color(1, 1, 0, 1),
-		Color(1, 0, 0, 1),
-		Color(1, 0, 1, 1),
-		Color(0, 0, 0, 1),
-	};
-
-	TexCoord texcoords[] =
-	{
-		TexCoord(0.0, 0.0, 0.0),
-		TexCoord(0.0, 1.0, 0.0),
-		TexCoord(1.0, 1.0, 0.0),
-		TexCoord(1.0, 0.0, 0.0),
-		TexCoord(1.0, 0.0, 0.0),
-		TexCoord(1.0, 1.0, 0.0),
-		TexCoord(1.0, 1.0, 0.0),
-		TexCoord(1.0, 0.0, 0.0),
-		TexCoord(1.0, 0.0, 0.0),
-	};
-
-	int32_t vertices[] =
-	{
-		0,  1,  2,  3,  4,  5,
-		6,  7,  8
-	};
-
-	// fill in the VBO buffers for this line:
-	fillLineVBO(output, pointArr, normals, colors, texcoords, vertices, 9, 9, myNumVBOTexLayers);
-	return;
-}
-
-void
-TdAssimp::triangleGeometryVBO(SOP_VBOOutput* output)
-{
-	Vector normals[] =
-	{
-		Vector(1.0f, 0.0f, 0.0f), //v0
-		Vector(0.0f, 1.0f, 0.0f), //v1
-		Vector(0.0f, 0.0f, 1.0f), //v2
-	};
-
-	Color color[] =
-	{
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-	};
-
-	Position pointArr[] =
-	{
-		Position(0.0f, 0.0f, 0.0f),
-		Position(0.0f, 1.0f, 0.0f),
-		Position(1.0f, 0.0f, 0.0f),
-	};
-
-	int32_t vertices[] = { 0, 1, 2 };
-
-	// fill in the VBO buffers for this triangle:
-	fillFaceVBO(output, pointArr, normals, color, nullptr, vertices, 1, myNumVBOTexLayers, 1);
-
-	return;
-}
-
-void
-TdAssimp::particleGeometryVBO(SOP_VBOOutput* output)
-{
-	Position pointArr[] =
-	{
-		Position(-0.8f, 0.0f, 1.0f),
-		Position(-0.6f, 0.4f, 1.0f),
-		Position(-0.4f, 0.8f, 1.0f),
-		Position(-0.2f, 0.4f, 1.0f),
-		Position(0.0f,  0.0f, 1.0f),
-		Position(0.2f, -0.4f, 1.0f),
-		Position(0.4f, -0.8f, 1.0f),
-		Position(0.6f, -0.4f, 1.0f),
-		Position(0.8f, -0.2f, 1.0f),
-
-		Position(-0.8f, 0.2f, 1.0f),
-		Position(-0.6f, 0.6f, 1.0f),
-		Position(-0.4f, 1.0f, 1.0f),
-		Position(-0.2f, 0.6f, 1.0f),
-		Position(0.0f,  0.2f, 1.0f),
-		Position(0.2f, -0.2f, 1.0f),
-		Position(0.4f, -0.6f, 1.0f),
-		Position(0.6f, -0.2f, 1.0f),
-		Position(0.8f,  0.0f, 1.0f),
-
-		Position(-0.8f, -0.2f, 1.0f),
-		Position(-0.6f,  0.2f, 1.0f),
-		Position(-0.4f,  0.6f, 1.0f),
-		Position(-0.2f,  0.2f, 1.0f),
-		Position(0.0f, -0.2f, 1.0f),
-		Position(0.2f, -0.6f, 1.0f),
-		Position(0.4f, -1.0f, 1.0f),
-		Position(0.6f, -0.6f, 1.0f),
-		Position(0.8f, -0.4f, 1.0f),
-	};
-
-
-	Vector normals[] =
-	{
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-		Vector(1.0f, 1.0f, 1.0f),
-
-	};
-
-	Color colors[] =
-	{
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(0.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(0.0f, 0.0f, 0.0f, 1.0f),
-
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(0.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(0.0f, 0.0f, 0.0f, 1.0f),
-
-		Color(0.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(0.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 1.0f, 1.0f),
-		Color(1.0f, 1.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 0.0f, 1.0f),
-		Color(1.0f, 0.0f, 1.0f, 1.0f),
-		Color(0.0f, 0.0f, 0.0f, 1.0f),
-	};
-
-	TexCoord texcoords[] =
-	{
-		TexCoord(0.0f, 0.0f, 0.0f),
-		TexCoord(0.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-
-		TexCoord(0.0f, 0.0f, 0.0f),
-		TexCoord(0.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-
-		TexCoord(0.0f, 0.0f, 0.0f),
-		TexCoord(0.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 1.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-		TexCoord(1.0f, 0.0f, 0.0f),
-	};
-
-	int32_t vertices[] =
-	{
-		0,  1,  2,  3,  4,  5,
-		6,  7,  8, 9, 10, 11, 12,
-		13, 14, 15, 16, 17, 18, 19, 20,
-		21, 22, 23, 24, 25, 26
-	};
-
-	// fill in the VBO buffers for this particle system:
-	fillParticleVBO(output, pointArr, normals, colors, texcoords, vertices, 27, 27, myNumVBOTexLayers);
-	return;
-}
-
-
-void
-TdAssimp::executeVBO(SOP_VBOOutput* output,
-						const OP_Inputs* inputs,
-						void* reserved)
+TdAssimp::executeVBO(SOP_VBOOutput* output,const OP_Inputs* inputs,void* reserved)
 {
 	myExecuteCount++;
 
 	if (!output)
 	{
 		return;
-	}
-
-	if (inputs->getNumInputs() > 0)
-	{
-		// if there is a input node SOP node
-
-		inputs->enablePar("Reset", 0);	// not used
-		inputs->enablePar("Shape", 0);	// not used
-		inputs->enablePar("Scale", 0);  // not used
-	}
-	else
-	{
-		inputs->enablePar("Shape", 0);
-
-		inputs->enablePar("Scale", 1); // enable the scale selection
-		double	 scale = inputs->getParDouble("Scale");
-
-		// In this sample code an input CHOP node parameter is supported,
-		// however it is possible to have DAT or TOP inputs as well
-
-		const OP_CHOPInput	*cinput = inputs->getParCHOP("Chop");
-		if (cinput)
-		{
-			int numSamples = cinput->numSamples;
-			int ind = 0;
-			myChopChanName = std::string(cinput->getChannelName(0));
-			myChop = inputs->getParString("Chop");
-
-			myChopChanVal = float(cinput->getChannelData(0)[ind]);
-			scale = float(cinput->getChannelData(0)[ind] * scale);
-
-		}
-
-		// if the geometry have normals or colors, call enable functions:
-
-		output->enableNormal();
-		output->enableColor();
-		// numLayers 1 means the texcoord will have 1 layer of uvw per each vertex:
-		myNumVBOTexLayers = 1;
-		output->enableTexCoord(myNumVBOTexLayers);
-
-		// add custom attributes and access them in the GLSL (shader) code:
-		SOP_CustomAttribInfo cu1("customColor", 4, AttribType::Float);
-		output->addCustomAttribute(cu1);
-		SOP_CustomAttribInfo cu2("customVert", 1, AttribType::Float);
-		output->addCustomAttribute(cu2);
-
-		// the number of vertices and index buffers must be set before generating any geometries:
-		// set the bounding box for correct homing (specially for Straight to GPU mode):
-#define CUBE_VBO 1
-#define LINE_VBO 0
-#define PARTICLE_VBO 0
-#if CUBE_VBO
-		{
-			//draw Cube:
-			int32_t numVertices = 36;
-			int32_t numIndices = 36;
-
-			output->allocVBO(numVertices, numIndices, VBOBufferMode::Static);
-
-			cubeGeometryVBO(output, (float)scale);
-			output->setBoundingBox(BoundingBox(1.0f, -1.0f, -1.0f, 3.0f, 1.0f, 1.0f));
-		}
-#elif LINE_VBO
-		{
-			// draw Line:
-			int32_t numVertices = 10;
-			int32_t numIndices = 10;
-
-			output->allocVBO(numVertices, numIndices, VBOBufferMode::Static);
-
-			lineGeometryVBO(output);
-		}
-#elif PARTICLE_VBO
-		{
-			// draw Particle System:
-			int32_t numVertices = 27;
-			int32_t numIndices = 27;
-
-			output->allocVBO(numVertices, numIndices, VBOBufferMode::Static);
-
-			particleGeometryVBO(output);
-		}
-#endif
-
-		// once the geometry VBO buffers are filled in, call this function as the last function
-		output->updateComplete();
-
 	}
 
 }
@@ -1481,7 +804,6 @@ TdAssimp::getInfoDATEntries(int32_t index,
 }
 
 
-
 void
 TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 {
@@ -1515,7 +837,9 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 		assert(res == OP_ParAppendResult::Success);
 	}
 
-
+	///// leaving this commented out now, since we can assume user will always want tangents, if they aren't in the model lets calc them.
+	///// simplifies the whole array of parameters greatly into a situation where there are no parameter dependancy, thus less confusing.
+	/*
 	// Calc Tangent Space
 	{
 		OP_NumericParameter p;
@@ -1529,20 +853,6 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 		OP_ParAppendResult res = manager->appendToggle(p);
 		assert(res == OP_ParAppendResult::Success);
 	}
-
-	/*
-	// Mikktspace Tangents
-	{
-		OP_NumericParameter p;
-
-		p.name = "Mikktspace";
-		p.label = "MikkTSpace";
-		p.page = "Processing";
-		p.defaultValues[0] = false;
-
-		OP_ParAppendResult res = manager->appendToggle(p);
-		assert(res == OP_ParAppendResult::Success);
-	}
 	*/
 
 	// Tangent Algorithm
@@ -1551,7 +861,7 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 		p.name = "Tangentalgorithm";
 		p.label = "Tangent Algorithm";
 		p.page = "Processing";
-		p.defaultValue = "Mikktspace";
+		p.defaultValue = "Assimp";
 		std::array<const char*, 4> Names =
 		{
 			"Mikktspace",
@@ -1566,8 +876,11 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 
 		assert(res == OP_ParAppendResult::Success);
 	}
-
-
+	
+	///////// we are ditching these two parameters in favor of a more intuitive single parameter, called "Attribute Style" below. 
+	///////// realistically, there is no big benefit to users to have bitangents in a TD shading world, but it is relevant for filament.
+	///////// further more, bitangent in filament is not consumed directly, it's packed into a quat so we can reduce this to 1 switch.
+	/*
 	// Recalculatebitangent
 	{
 		OP_NumericParameter p;
@@ -1597,6 +910,7 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 		OP_ParAppendResult res = manager->appendToggle(p);
 		assert(res == OP_ParAppendResult::Success);
 	}
+	*/
 
 	// Join Identical Vertices
 	{
@@ -1936,11 +1250,33 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 	}
 	*/
 
+	// Output Attributes Style
+	{
+		OP_StringParameter p;
+		p.name = "Attributestyle";
+		p.label = "Attribute Style";
+		p.page = "Sop Output";
+		p.defaultValue = "Touchdesigner";
+		std::array<const char*, 4> Names =
+		{
+			"Touchdesigner",
+			"Filament"
+		};
+		std::array<const char*, 4> Labels =
+		{
+			"TouchDesigner",
+			"Filament"
+		};
+		OP_ParAppendResult res = manager->appendMenu(p, int(Names.size()), Names.data(), Labels.data());
+
+		assert(res == OP_ParAppendResult::Success);
+	}
+
 	{
 		OP_NumericParameter p;
 		p.name = "Vertexcolortint";
 		p.label = "Vertex Color Tint";
-		p.page = "Processing";
+		p.page = "Sop Output";
 
 		const int ArraySize = 4;
 
