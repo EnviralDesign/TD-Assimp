@@ -85,20 +85,8 @@ TD-Assimp can do a number of really useful mesh [post processing steps](https://
 
 These are the post processing flags implemented for this SOP plugin as custom parameters:
 
-- **Gen Normals if missing (aiProcess_GenNormals)**
-  - Generates normals for all faces of all meshes. This is ignored if normals are already there at the time this flag is evaluated. Model importers try to load them from the source file, so they're usually already there. Face normals are shared between all points of a single face, so a single point can have multiple normals, which forces the library to duplicate vertices in some cases.
-
-- **Calc Tangent Space (aiProcess_GenNormals)**
-  - Calculates the tangents and bitangents for the imported meshes. Does nothing if a mesh does not have normals. You might want this post processing step to be executed if you plan to use tangent space calculations such as normal mapping applied to the meshes.
-
 - **Tangent Algorithm**
-  - Assimp has it's own tangent calculation algorithm which works well, but I've gone ahead and implemented the MikkTSpace algorithm as well. This is a more robust algorithm that is used by many other 3D applications. However it does increase the number of verticies, so try both and see if Assimp version works fine visually.
-
-- **Recalc Bitangent**
-  - Recalculates the bitangent using the normal and the tangent.
-
-- **TBN as Quaternion**
-  - Encodes the TBN 3x3 matrix as a quaternion. This is useful for packing the data into a single float4. This is data that google filament uses for it's PBR shader. If you are using standard TouchDesigner shaders, you can ignore this and keep it off, as it will add a decent amount of overhead to the Assimp SOP.
+  - Assimp has it's own tangent calculation algorithm which works well, but I've gone ahead and implemented the MikkTSpace algorithm also. This version of MikkTSpace does not do welding properly, so it's reccomended to use the Assimp version unless you get weird results and want to try an alternative. Mikktspace will introduce more points that share the same position etc, so it may increase render times.
 
 - **Join Identical Verticies (aiProcess_JoinIdenticalVertices)**
   - Identifies and joins identical vertex data sets within all imported meshes. After this step is run, each mesh contains unique vertices, so a vertex may be used by multiple faces. You usually want to use this post processing step. If your application deals with indexed geometry, this step is compulsory or you'll just waste rendering time. If this flag is not specified, no vertices are referenced by more than one face and no index buffer is required for rendering.
