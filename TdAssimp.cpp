@@ -682,8 +682,8 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			// add mesh_position, the vertex attribute filament actually looks for.
 			// since our position data is vec3, we expand it here to vec4.
 			SOP_CustomAttribData mesh_position_attrs("mesh_position", 4, AttribType::Float);
-			std::vector<float> expandedPositions;
-			for (int i = 0; i < mesh.Position_Data.size() / 3; i++) {
+			expandedPositions.clear();
+			for (int i = 0; i < mesh.Position_Data.size(); i++) {
 				expandedPositions.push_back(mesh.Position_Data[i].x);
 				expandedPositions.push_back(mesh.Position_Data[i].y);
 				expandedPositions.push_back(mesh.Position_Data[i].z);
@@ -691,13 +691,16 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			// assign it as a custom attribute, even though it's a fairly standard one by filament's standards.
 			mesh_position_attrs.floatData = expandedPositions.data();
 			output->setCustomAttribute(&mesh_position_attrs, output->getNumPoints());
-
+			//Assimp::DefaultLogger::get()->info("mesh.Position_Data.size(): " + std::to_string(mesh.Position_Data.size()));
+			//Assimp::DefaultLogger::get()->info("output->getNumPoints(): " + std::to_string(output->getNumPoints()));
+			//Assimp::DefaultLogger::get()->info("expandedPositions.size(): " + std::to_string(expandedPositions.size()));
+			
 			// add mesh_color for filament. fortunately color data is already a vec4.
 			// unfortunately can't assign it directly for c++ reasons. this is probably unefficient, so lets look at it later.
 			// maybe we can not use TD's Color class to store this in general.
 			SOP_CustomAttribData mesh_color_attrs("mesh_color", 4, AttribType::Float);
-			std::vector<float> expandedColors;
-			for (int i = 0; i < mesh.Color_Data.size() / 4; i++) {
+			expandedColors.clear();
+			for (int i = 0; i < mesh.Color_Data.size(); i++) {
 				expandedColors.push_back(mesh.Color_Data[i].r);
 				expandedColors.push_back(mesh.Color_Data[i].g);
 				expandedColors.push_back(mesh.Color_Data[i].b);
@@ -707,7 +710,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			
 			// set mesh_uv0 for filament.
 			SOP_CustomAttribData mesh_uv0_attrs("mesh_uv0", 2, AttribType::Float);
-			std::vector<float> expandedUvs0;
+			expandedUvs0.clear();
 			int texindex = 0;
 			for (TexCoord i : mesh.Uv_Data) {
 				// output->setTexCoord(&i, 1, texindex);
@@ -717,12 +720,14 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			}
 			mesh_uv0_attrs.floatData = expandedUvs0.data();
 			output->setCustomAttribute(&mesh_uv0_attrs, output->getNumPoints());
+		
+			// set mesh_tangents for filament.
+			SOP_CustomAttribData mesh_tangents_attrs("mesh_tangents", 4, AttribType::Float);
+			mesh_tangents_attrs.floatData = mesh.TbnQuat_Data.data();
+			output->setCustomAttribute(&mesh_tangents_attrs, output->getNumPoints());
+			
+		
 		}
-
-		// set mesh_tangents for filament.
-		SOP_CustomAttribData mesh_tangents_attrs("mesh_tangents", 4, AttribType::Float);
-		mesh_tangents_attrs.floatData = mesh.TbnQuat_Data.data();
-		output->setCustomAttribute(&mesh_tangents_attrs, output->getNumPoints());
 
 
 		////////////////////////////////////////////////

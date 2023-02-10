@@ -57,6 +57,10 @@ public:
 };
 */
 
+std::vector<float> expandedPositions;
+std::vector<float> expandedColors;
+std::vector<float> expandedUvs0;
+
 class Mesh {
 public:
 	std::vector<Position> Position_Data; // 3
@@ -66,7 +70,7 @@ public:
 	std::vector<float> Tangent_Data; // 4
 	std::vector<float> Bitangent_Data; // 3
 	std::vector<float> TbnQuat_Data; // 4
-	std::vector<int> FaceIndex_Data; // 4
+	std::vector<int32_t> FaceIndex_Data; // 4
 	int numTris = 0; // init'd here, but updated in main for loop.
 	int vertsPerFace = 3; // always 3 , always using triangles for our implementation.
 };
