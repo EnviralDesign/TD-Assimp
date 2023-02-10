@@ -383,7 +383,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 					if (RecalculateBitangent == 1) {
 						// recalc bitangent
-						crossProduct(normal, tangent, bitangent);
+						cross(normal, tangent, bitangent);
 					}
 					else {
 						bitangent[0] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mBitangents[i][0] : 0; // x
@@ -500,7 +500,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 						if (RecalculateBitangent == 1) {
 							// recalc bitangent, writes data to third argument.
-							crossProduct(normal, tangent, bitangent);
+							cross(normal, tangent, bitangent);
 						}
 						else {
 							bitangent[0] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mBitangents[i][0] : 0; // x
@@ -550,11 +550,18 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 				bitangent[2] = mesh.Bitangent_Data[(vertex_index * 3) +2];
 
 				if (DoTbnAsQuat == 1) {
+					
+					// OLD WAY, maybe creating issues.
+					/*
 					tbn_to_quat(
 						tangent[0], tangent[1], tangent[2], tangentSign,
 						bitangent[0], bitangent[1], bitangent[2],
 						normal[0], normal[1], normal[2], tbnquat
 					);
+					*/
+
+					frisvadTangentSpace( tangent, bitangent, normal, tbnquat );
+
 
 					mesh.TbnQuat_Data.push_back(tbnquat[0]);
 					mesh.TbnQuat_Data.push_back(tbnquat[1]);

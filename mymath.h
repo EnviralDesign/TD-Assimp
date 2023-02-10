@@ -1,23 +1,61 @@
 #pragma once
 #include <math.h>
 #include <iostream>
+#include <cmath>
 
-void crossProduct(float v_A[], float v_B[], float c_P[]) {
-	/* first two arguments are 3 component vectors
-	 third argument is where the result is written to.
-	 */
-	c_P[0] = v_A[1] * v_B[2] - v_A[2] * v_B[1];
-	c_P[1] = -(v_A[0] * v_B[2] - v_A[2] * v_B[0]);
-	c_P[2] = v_A[0] * v_B[1] - v_A[1] * v_B[0];
+void cross(const float a[3], const float b[3], float result[3]) {
+	result[0] = a[1] * b[2] - a[2] * b[1];
+	result[1] = a[2] * b[0] - a[0] * b[2];
+	result[2] = a[0] * b[1] - a[1] * b[0];
 }
 
-float dot_product(float vector_a[], float vector_b[]) {
+float dot_old(float vector_a[], float vector_b[]) {
 	/* given two 3 component vectors, this function returns the dot product. */
 	float product = 0;
 	for (int i = 0; i < 3; i++)
 		product = product + vector_a[i] * vector_b[i];
 	return product;
 }
+
+float dot(const float a[3], const float b[3]) {
+	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+float length(const float a[3]) {
+	return std::sqrt(dot(a, a));
+}
+
+void normalize(float a[3]) {
+	float len = length(a);
+	a[0] /= len;
+	a[1] /= len;
+	a[2] /= len;
+}
+
+void frisvadTangentSpace(const float t[3], const float b[3], const float n[3], float q[4]) {
+	float tangent[3]	= { t[0], t[1], t[2] };
+	float bitangent[3]	= { b[0], b[1], b[2] };
+	float normal[3]		= { n[0], n[1], n[2] };
+
+	normalize(tangent);
+	normalize(bitangent);
+	normalize(normal);
+
+	float m[3][3] = { { tangent[0], tangent[1], tangent[2] },
+					  { normal[0], normal[1], normal[2] },
+					  { bitangent[0], bitangent[1], bitangent[2] } };
+
+	float w = std::sqrt(1.0f + m[0][0] + m[1][1] + m[2][2]) / 2.0f;
+	float x = (m[2][1] - m[1][2]) / (4.0f * w);
+	float y = (m[0][2] - m[2][0]) / (4.0f * w);
+	float z = (m[1][0] - m[0][1]) / (4.0f * w);
+
+	q[0] = x;
+	q[1] = y;
+	q[2] = z;
+	q[3] = w;
+}
+
 
 #define CHAR_BIT 8
 
@@ -155,10 +193,10 @@ void tbn_to_quat(float tx, float ty, float tz, float tw, float bx, float by, flo
 	
 #if 1
 	if (tw > 0) {
-		crossProduct(t, n, b);
+		cross(t, n, b);
 	}
 	else {
-		crossProduct(n, t, b);
+		cross(n, t, b);
 	}
 #endif
 	
@@ -166,8 +204,8 @@ void tbn_to_quat(float tx, float ty, float tz, float tw, float bx, float by, flo
 	// If there's a reflection ((n x t) . b <= 0), make sure w is negative
 	float cc[3];
 #if 1
-	crossProduct(t, n, cc);
-	if (dot_product(cc, b) < 0.0) {
+	cross(t, n, cc);
+	if (dot(cc, b) < 0.0) {
 		out[0] *= -out[0];
 		out[1] *= -out[1];
 		out[2] *= -out[2];
