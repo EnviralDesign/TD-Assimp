@@ -132,4 +132,4 @@ Most applications will support UV mapping only, so you will probably want to spe
 
 ## Support
 
-If you find this useful, please feel free to support this work on my [Github Sponsors](https://github.com/sponsors/EnviralDesign) OR on [Patreon](https://www.patreon.com/EnviralDesign). If you have aeny issues or bugs, please drop an issue here.
+If you find this useful, please feel free to support this work on my [Github Sponsors](https://github.com/sponsors/EnviralDesign) OR on [Patreon](https://www.patreon.com/EnviralDesign). If you have any issues or bugs, please drop an issue here.
