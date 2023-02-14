@@ -61,6 +61,8 @@ std::vector<float> expandedPositions;
 std::vector<float> expandedColors;
 std::vector<float> expandedUvs0;
 
+std::vector<float> debugging;
+
 class Mesh {
 public:
 	std::vector<Position> Position_Data; // 3
@@ -92,6 +94,7 @@ struct Tangent {
 	float x, y, z;
 };
 
+/*
 std::vector<Tangent> ComputeTangents(const std::vector<Triangle>& triangles) {
     std::vector<Tangent> tangents;
     tangents.resize(triangles.size() * 3);
@@ -142,3 +145,4 @@ std::vector<Tangent> ComputeTangents(const std::vector<Triangle>& triangles) {
 
     return tangents;
 }
+*/

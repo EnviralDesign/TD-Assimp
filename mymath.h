@@ -32,30 +32,6 @@ void normalize(float a[3]) {
 	a[2] /= len;
 }
 
-void frisvadTangentSpace(const float t[3], const float b[3], const float n[3], float q[4]) {
-	float tangent[3]	= { t[0], t[1], t[2] };
-	float bitangent[3]	= { b[0], b[1], b[2] };
-	float normal[3]		= { n[0], n[1], n[2] };
-
-	normalize(tangent);
-	normalize(bitangent);
-	normalize(normal);
-
-	float m[3][3] = { { tangent[0], tangent[1], tangent[2] },
-					  { normal[0], normal[1], normal[2] },
-					  { bitangent[0], bitangent[1], bitangent[2] } };
-
-	float w = std::sqrt(1.0f + m[0][0] + m[1][1] + m[2][2]) / 2.0f;
-	float x = (m[2][1] - m[1][2]) / (4.0f * w);
-	float y = (m[0][2] - m[2][0]) / (4.0f * w);
-	float z = (m[1][0] - m[0][1]) / (4.0f * w);
-
-	q[0] = x;
-	q[1] = y;
-	q[2] = z;
-	q[3] = w;
-}
-
 
 #define CHAR_BIT 8
 
@@ -153,17 +129,14 @@ void tbn_to_quat(float tx, float ty, float tz, float tw, float bx, float by, flo
 				(out[3] * out[3])),
 			0.5);
 
-#if 1
 		// normalize quaternion. normalizing quats works like normalizing regular vec3's,
 		// except with a 4th component.
 		out[0] = out[0] / quatMag;
 		out[1] = out[1] / quatMag;
 		out[2] = out[2] / quatMag;
 		out[3] = out[3] / quatMag;
-#endif
 	}
 
-#if 1 // creates some problems.
 	// positivity check - flip signs if w is negative.
 	if (out[3] < 0) {
 		out[0] = -out[0];
@@ -171,13 +144,12 @@ void tbn_to_quat(float tx, float ty, float tz, float tw, float bx, float by, flo
 		out[2] = -out[2];
 		out[3] = -out[3];
 	}
-#endif
 
 	// bias the quat, ensure w is never 0.0
 	int storageSize = sizeof(int16_t);
 	//const int char_bit = 8;
 	float bias = 1 / (float)((1 << (storageSize * CHAR_BIT - 1)) - 1);
-#if 1 // creates some problems.
+
 	if (out[3] < bias) {
 		out[3] = bias;
 		float factor = pow(1.0 - bias * bias, 0.5); // same as square root.
@@ -185,30 +157,24 @@ void tbn_to_quat(float tx, float ty, float tz, float tw, float bx, float by, flo
 		out[1] *= factor;
 		out[2] *= factor;
 	}
-#endif
 
 	float b[3];
 	float n[3] = { nx,ny,nz };
 	float t[3] = { tx,ty,tz };
 	
-#if 1
 	if (tw > 0) {
 		cross(t, n, b);
 	}
 	else {
 		cross(n, t, b);
 	}
-#endif
-	
 
 	// If there's a reflection ((n x t) . b <= 0), make sure w is negative
 	float cc[3];
-#if 1
 	cross(t, n, cc);
 	if (dot(cc, b) < 0.0) {
 		out[0] *= -out[0];
 		out[1] *= -out[1];
 		out[2] *= -out[2];
 	}
-#endif
 }

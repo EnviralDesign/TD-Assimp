@@ -201,12 +201,14 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 	// output style, choose TouchDesigner(0) or Google Filament(1)
 	int Attributestyle = inputs->getParInt("Attributestyle");
+	//Attributestyle = 1;
 
 	// enable the Tangentalgorithm parameter, maybe able to delete this later due to a bug.
 	inputs->enablePar("Tangentalgorithm", 1);
 
 	// determine if we are processing tangents as assimp imported style OR as mikktspace tangents.
-	int DoMikktSpaceTangents = inputs->getParInt("Tangentalgorithm") == 0;
+	int DoMikktSpaceTangents = inputs->getParInt("Tangentalgorithm") == 1;
+	//DoMikktSpaceTangents = 0;
 	
 	
 	// assign the various helper functions to mikktspace's interface object so it knows how to interact with our data.
@@ -272,7 +274,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 		| aiProcess_CalcTangentSpace // calc tangent space must be enabled
 		| (inputs->getParInt("Joinidenticalvertices")		== 1 ? aiProcess_JoinIdenticalVertices : 0)
 		| aiProcess_Triangulate // triangulation must be enabled.
-		| (inputs->getParInt("Gennormals")					== 1 ? aiProcess_GenNormals : 0)
+		| aiProcess_GenNormals
 		| (inputs->getParInt("Validatedatastructure")		== 1 ? aiProcess_ValidateDataStructure : 0)
 		| (inputs->getParInt("Improvecachelocality")		== 1 ? aiProcess_ImproveCacheLocality : 0)
 		| (inputs->getParInt("Fixinfacingnormals")			== 1 ? aiProcess_FixInfacingNormals : 0)
@@ -325,7 +327,6 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 						)
 					);
 
-
 					// ADD VERTEX COLORS
 					int HasVertexColors = scene->mMeshes[mesh_index]->HasVertexColors(0);
 					mesh.Color_Data.push_back(
@@ -343,6 +344,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 					// at that point we can attempt to re introduce multiple uv sets support, but does anyone even need this?
 					int numTextureLayers = scene->mMeshes[mesh_index]->GetNumUVChannels();
 					numTextureLayers = std::min(1, numTextureLayers);
+					//numTextureLayers = 1;
 					mesh.Uv_Data.push_back(
 						TexCoord(
 							numTextureLayers ? scene->mMeshes[mesh_index]->mTextureCoords[0][i][0] : 0, // u
@@ -360,6 +362,9 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 							HasNormals ? scene->mMeshes[mesh_index]->mNormals[i][2] : 0  // z
 						)
 					);
+					normal[0] = scene->mMeshes[mesh_index]->mNormals[i][0];
+					normal[1] = scene->mMeshes[mesh_index]->mNormals[i][1];
+					normal[2] = scene->mMeshes[mesh_index]->mNormals[i][2];
 
 					// ADD TANGENT / BITANGENT
 					int HasTangentsAndBitangents = scene->mMeshes[mesh_index]->HasTangentsAndBitangents();
@@ -368,13 +373,11 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 					mesh.Tangent_Data.push_back(HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][2] : 0); // z
 					mesh.Tangent_Data.push_back(1.0); // handedness / sign. 1 is assumed, since assimp's internally matches openGL and also they do not provide this value in their data structure.
 
-					normal[0] = scene->mMeshes[mesh_index]->mNormals[i][0];
-					normal[1] = scene->mMeshes[mesh_index]->mNormals[i][1];
-					normal[2] = scene->mMeshes[mesh_index]->mNormals[i][2];
 					tangent[0] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][0] : 0;
 					tangent[1] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][1] : 0;
 					tangent[2] = HasTangentsAndBitangents ? scene->mMeshes[mesh_index]->mTangents[i][2] : 0;
-
+					tangentSign = 1.0; // handedness / sign. 1 is assumed, since assimp's internally matches openGL and also they do not provide this value in their data structure.
+					
 					if (Attributestyle == 1) {
 						// recalc bitangent
 						cross(normal, tangent, bitangent);
@@ -388,8 +391,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 					mesh.Bitangent_Data.push_back(bitangent[0]); // x
 					mesh.Bitangent_Data.push_back(bitangent[1]); // y
 					mesh.Bitangent_Data.push_back(bitangent[2]); // z
-
-
+					
 					if (Attributestyle == 1) {
 						tbn_to_quat(
 							tangent[0], tangent[1], tangent[2], tangentSign,
@@ -545,16 +547,14 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 				if (Attributestyle == 1) {
 					
-					// OLD WAY, maybe creating issues.
-					/*
 					tbn_to_quat(
 						tangent[0], tangent[1], tangent[2], tangentSign,
 						bitangent[0], bitangent[1], bitangent[2],
 						normal[0], normal[1], normal[2], tbnquat
 					);
-					*/
+					
 
-					frisvadTangentSpace( tangent, bitangent, normal, tbnquat );
+					// frisvadTangentSpace( tangent, bitangent, normal, tbnquat );
 
 
 					mesh.TbnQuat_Data.push_back(tbnquat[0]);
@@ -682,7 +682,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			// add mesh_position, the vertex attribute filament actually looks for.
 			// since our position data is vec3, we expand it here to vec4.
 			SOP_CustomAttribData mesh_position_attrs("mesh_position", 4, AttribType::Float);
-			expandedPositions.clear();
+			//expandedPositions.clear();
 			for (int i = 0; i < mesh.Position_Data.size(); i++) {
 				expandedPositions.push_back(mesh.Position_Data[i].x);
 				expandedPositions.push_back(mesh.Position_Data[i].y);
@@ -699,7 +699,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			// unfortunately can't assign it directly for c++ reasons. this is probably unefficient, so lets look at it later.
 			// maybe we can not use TD's Color class to store this in general.
 			SOP_CustomAttribData mesh_color_attrs("mesh_color", 4, AttribType::Float);
-			expandedColors.clear();
+			//expandedColors.clear();
 			for (int i = 0; i < mesh.Color_Data.size(); i++) {
 				expandedColors.push_back(mesh.Color_Data[i].r);
 				expandedColors.push_back(mesh.Color_Data[i].g);
@@ -710,7 +710,7 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			
 			// set mesh_uv0 for filament.
 			SOP_CustomAttribData mesh_uv0_attrs("mesh_uv0", 2, AttribType::Float);
-			expandedUvs0.clear();
+			//expandedUvs0.clear();
 			int texindex = 0;
 			for (TexCoord i : mesh.Uv_Data) {
 				// output->setTexCoord(&i, 1, texindex);
@@ -725,7 +725,11 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 			SOP_CustomAttribData mesh_tangents_attrs("mesh_tangents", 4, AttribType::Float);
 			mesh_tangents_attrs.floatData = mesh.TbnQuat_Data.data();
 			output->setCustomAttribute(&mesh_tangents_attrs, output->getNumPoints());
-			
+
+			// debugging output
+			SOP_CustomAttribData mesh_debugging_attrs("mesh_debugging", 4, AttribType::Float);
+			mesh_debugging_attrs.floatData = debugging.data();
+			output->setCustomAttribute(&mesh_debugging_attrs, output->getNumPoints());
 		
 		}
 
@@ -770,14 +774,20 @@ TdAssimp::execute(SOP_Output* output, const OP_Inputs* inputs, void* reserved)
 
 		}
 
-		//mesh.Position_Data.clear();
-		//mesh.Normal_Data.clear();
-		//mesh.Uv_Data.clear();
-		//mesh.Color_Data.clear();
-		//mesh.Tangent_Data.clear();
-		//mesh.Bitangent_Data.clear();
-		//mesh.TbnQuat_Data.clear();
-		//mesh.FaceIndex_Data.clear();
+		mesh.Position_Data.clear();
+		mesh.Normal_Data.clear();
+		mesh.Uv_Data.clear();
+		mesh.Color_Data.clear();
+		mesh.Tangent_Data.clear();
+		mesh.Bitangent_Data.clear();
+		mesh.TbnQuat_Data.clear();
+		mesh.FaceIndex_Data.clear();
+
+		expandedUvs0.clear();
+		expandedColors.clear();
+		expandedPositions.clear();
+
+		debugging.clear();
 
 	}
 
@@ -950,6 +960,10 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 
 
 	/////////////////////////////////// POST PROCESSING PAGE /////////////////////////////////////////
+	
+	///// leaving this commented out now, since we can assume user will always want tangents, if they aren't in the model lets calc them.
+	///// simplifies the whole array of parameters greatly into a situation where there are no parameter dependancy, thus less confusing.
+	/*
 
 		// Gen Normals - generates normals only for points that do not already have any.
 	{
@@ -964,9 +978,7 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 		assert(res == OP_ParAppendResult::Success);
 	}
 
-	///// leaving this commented out now, since we can assume user will always want tangents, if they aren't in the model lets calc them.
-	///// simplifies the whole array of parameters greatly into a situation where there are no parameter dependancy, thus less confusing.
-	/*
+
 	// Calc Tangent Space
 	{
 		OP_NumericParameter p;
@@ -991,13 +1003,13 @@ TdAssimp::setupParameters(OP_ParameterManager* manager, void* reserved)
 		p.defaultValue = "Assimp";
 		std::array<const char*, 4> Names =
 		{
-			"Mikktspace",
-			"Assimp"
+			"Assimp",
+			"Mikktspace"
 		};
 		std::array<const char*, 4> Labels =
 		{
-			"Mikktspace",
-			"Assimp"
+			"Assimp",
+			"Mikktspace"
 		};
 		OP_ParAppendResult res = manager->appendMenu(p, int(Names.size()), Names.data(), Labels.data());
 
